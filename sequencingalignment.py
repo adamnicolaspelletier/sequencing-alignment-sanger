@@ -1,90 +1,92 @@
   
 ###                                            -*- Mode: Python -*-
 ###                                            -*- coding UTF-8 -*-
-### scriptname.py
-### Copyright 2016 Institut de Recherche en Immunologie et Cancerologie (IRIC)
+### sequencingalignment.py
+### Copyright 2017 Institut de Recherche en Immunologie et Cancerologie (IRIC)
 ### Author :  Adam-Nicolas Pelletier
-### Last modified On: 29-03-16
+### Last modified On: 25-05-17
 
 
 
-from Bio.Align.Applications import MafftCommandline
-from StringIO import StringIO
-from Bio import AlignIO
-from Bio.Alphabet.IUPAC import IUPACAmbiguousDNA
 from Bio import SeqIO
-import glob  #module for file wildcards. can use genename as reference to look for several transcript fasta sequences at once. CHANGE PATH.
 import os
 import pandas as pd
 import numpy as np
-import fileinput
-import operator
 import subprocess
-import pprint
 import sys
 import argparse
+import shutil
 
 
-########################################################################################################################################################
-########################################################## INSTRUCTIONS ################################################################################
-
-# """ 
-# 1. Have the FASTQ sequence of your sequencing run in the current directory
-# 2. Also include the CCDS sequence in FASTA format of your gene of interest . Have ther EnsGeneID, transcript ID and geneSymbol in the header for each FASTA format
-# 3. Have the filename information/primer/orientation in a textfile, refer to the template.txt files for formatting.
-# 4. Edit the USER input and output section in this file for your files. 
-# 5. Run the script.
-# 6. To get a clustal readable output, run the muscle.sh script after this. In terminal run ./muscle.sh , which reads all fasta files in 
-# 	clustal_alignment_genes dircetory and makes a clustalw alignemnt in the final
-# 7. When done, remove all FASTA and CLUSTAL alignment files from the ABI_files, clustal_alignments_genes and final files.
-# """
 ########################################################################################################################################################
 ########################################################## USER INPUT  AND OUTPUT ######################################################################
+cwd = os.getcwd() 
 
+pd.options.mode.chained_assignment = None  # default='warn
 
-
-parser = argparse.ArgumentParser(description="""Aligns  FWD and REV contigs from Sanger sequencing run and aligns them to 
-		their reference sequences using the MAFFT alogrithm. Can also integrate alignment to variant forms of the reference genes if FASTA sequences are supplied.
+parser = argparse.ArgumentParser(description="""Aligns FWD and REV contigs from Sanger sequencing run and aligns them to 
+		their reference sequences using the MAFFT algorithm. Can also integrate alignment to variant forms of the reference genes if FASTA sequences are supplied.
 		Outputs MSA in both the FASTA format and CLUSTAL output, for easy visualization and validation""" )
 parser.add_argument("-fq","--fastqfile",
-					help="FASTQ file containing sequencing results. Defaults to 'FastQ/fastaSeq7776.txt'", default= "FastQ/fastaSeq7776.txt")
-parser.add_argument("-r", "--reference", default="ccds_seq2.fasta",
-					help="File Containing reference FASTA sequences. Defaults to 'ccds_seq2.fasta'")
-parser.add_argument("-i", "--isoform", default="isoform_list2.txt",
-					help="List of possible isoforms file. Defaults to 'isoform_list2.txt'")
-parser.add_argument("-snv", "--snvfasta", default="SNVfasta.txt",
-					help="File Containing Variant FASTA sequences. Defaults to 'SNVfasta.txt'")
-parser.add_argument("-si", "--snvinfo", default="SDM_primer_output.txt",
-					help="File Containing Additional Info on the Variants. Defaults to 'SDM_primer_output.txt'")
+					help="FASTQ file containing sequencing results. Defaults to 'docs/ex_fastq_seq.fq'", default= str(cwd)+"/docs/ex_fastq_seq.fq")
+
+parser.add_argument("-r", "--reference", default=str(cwd)+"/docs/ex_ccds_seq.fa",
+					help="File Containing reference FASTA sequences. Defaults to 'CWD/docs/ex_ccds_seq.fa'")
+
+parser.add_argument("-vm", "--variantmode", action="store_true",
+					help="Activates variant mode, to make alignments based on the variant fasta flag.")
+
+parser.add_argument("-c", "--clip", action="store_true",
+					help="Clip terminal bases before and after the REFERENCE sequence in the final output.")
+
+parser.add_argument("-v", "--variantfasta", default=str(cwd)+"/docs/ex_variantfasta.fa",
+					help="File Containing Variant FASTA sequences. Can be generated automatically using the sitedirmutagen.py script. Defaults to 'CWD/docs/ex_variantfasta.fa'")
+
 parser.add_argument("-f","--filenames",
-					help="File containing the info for each individual FastQ Entry. Defaults to 'ABI_files/filenames3.txt'", default= "ABI_files/filenames3.txt")
-parser.add_argument("-go","--gapopen", type=int, 
-					help="""Value for the Gap Open Penalty for the Sequence Aligner. Higher values tends to prioritize 
-					large blocks and facilitate SNV detection in highly similar sequences. Defaults to -100""", default= -100.0)
+					help="File containing the info for each individual FastQ Entry. Defaults to 'CWD/docs/ex_filenames.txt'", default= str(cwd)+"/docs/ex_filenames.txt")
+
+parser.add_argument("-o", "--outputdir", default=str(cwd)+"/docs/Alignments/",
+                    help="Directory for Clustal and FASTA alignments files. Will create directory if it does not exist. Defaults to CWD/docs/Alignments/")
+
+parser.add_argument("-mp","--minphred",
+					help="Minimal threshold of quality to trust a phred score comparison between 2 reactions. Defaults to 15. 20 is a 1/100 miscall, and 10 a 1/10. ", default= 15)
+
 args = parser.parse_args()
 
 
 fastqfile = args.fastqfile
 ccdsfile = args.reference
-isoformfile = args.isoform
-snvfile = args.snvfasta
-snpinfo = args.snvinfo
+variantfile = args.variantfasta
 filenames = args.filenames
-gapopenvalue = args.gapopen
+outputdir = args.outputdir
+variantmode = args.variantmode
+minphred = args.minphred
+clip = args.clip
+
+print "\nsequencingalignment.py script for automating alignment of SANGER sequencing reactions  \n"
+print " ** use the -h flag for detailed help on how to use this script **\n"
 
 print "Using %s for FASTQ ..." % fastqfile
 print "Using %s for Reference FASTA ..." % ccdsfile
-print "Using %s for Possible Isoforms File ..." % isoformfile
-print "Using %s for Vairant Fasta sequences..." % snvfile
-print "Using %s for Additional SNV Information ..." % snpinfo
 print "Using %s for FastQ Entries List ..." % filenames
-print "Using %i for FastQ Entries List ...\n\n" % gapopenvalue
+print "Using %s directory to for outfiles ..." % outputdir
 
+if variantmode == True:
+	print "\n\n"
+	print "Running MAFFT alignment with variants..."
+	print "Using %s for Variant Fasta sequences..." % variantfile
+else: 
+	print "Running MAFFT alignment without variants..."
+
+print "\n\n"
 
 ########################################################################################################################################################
 ########################################################################################################################################################
 
-def reversecomp(rprimsequence): ## make a complement version of the sequence, and reverse it so it has the proper orientation
+
+
+def reversecomp(rprimsequence): 
+	"""Make a complement version of the sequence, and reverse it so it has the proper orientation. Standard in biology"""
 	a = ""
 	tempzrev = rprimsequence
 	tempzrev = tempzrev.replace("T","X")
@@ -99,519 +101,382 @@ def reversecomp(rprimsequence): ## make a complement version of the sequence, an
 		a += i
 	return a
 
-snv = raw_input("Include Variant in alignment? (y/n)")
-
-
-if snv == "y":
-	snvdict = {}
-	snpinfodf = pd.read_csv(snpinfo, sep = "\t")
-	snpinfodf2= snpinfodf[["Variation Name", "GENENAME", "Ensembl Gene ID"]]
-	snplist = snpinfodf2["Variation Name"].tolist()
-	mutseqlist = []
-
-	print "Running Muscle alignment with variants..."
-	for recordz in SeqIO.parse(snvfile, "fasta"):
-		snvdict[str(recordz.id)] = str(recordz.seq)
-	
-	for i in snplist:
-		try:
-			mutseqlist.append(snvdict[i])
-		except KeyError:
-			mutseqlist.append("---")
-
-	snpinfodf2["Sequence"] = mutseqlist
-
-		# snpinfodf["Sequence"] = recordz.
-		# fwd_id = snpinfodf.iloc[i]["Fwd_file"]
-	# print snpinfodf2
-elif snv == "n":
-	print "Running Muscle alignment without variants..."
-
-else: 
-	print str(snv) + " is an invalid choice. Aborting."
-	sys.exit()
-
-
-# fasta_sequences = SeqIO.parse(open(input_file),'fasta')
-# with open(output_file) as out_file:
-#     for fasta in fasta_sequences:
-#         name, sequence = fasta.id, fasta.seq.tostring()
-#         new_sequence = some_function(sequence)
-#         write_fasta(out_file)
-
-# Generate the list of PWMs to use
-# filelist = []
-# for i in os.listdir("Homosapiens_CISBP/pwmsUnif"):
-#   if i.endswith(".txt"):
-#       filelist.append("Homosapiens_CISBP/pwmsUnif"+"/")
-
-
-
-# promoterlist = []
-# for i in os.listdir("promoter_files/seeded/"+str(n)+"bp/"):
-#     if i.endswith(".txt"):
-#         promoterlist.append("promoter_files/seeded/"+str(n)+"bp/"+i)
-
-isoforms = open(isoformfile).read().splitlines()
-outputfile = "ABI_files/fasta/tempoutput.txt"
-
-phred_dict = {}
-
-handle = open(fastqfile, "rU")
-
-for record in SeqIO.parse(handle, "fastq"):
-	phred_dict[record.id] = record.letter_annotations['phred_quality']
-
-
-
-def fastaconvert(fastalist):  #convert a conventional fasta file into a list of IDs and whole sequences (merges the 50 characters per line)
-	a = ""
-	x = ""
-	z = []
-	for i in fastalist:
-		if ">" in i:
-			a = a.replace("\n","")
-			z.append(a)
-			x += i
-			x = x.replace("\n","")
-			z.append(x)
-			a = ""
-			x = ""
-		else:
-			a += i
-	del z[0]
-	return z
-
-def idsplitter(ID):
-	ID.pop()
-	realID = []
-	for i in ID:
-		name = str(i)
-		idsplit = name.split("|")
-		realID.append(idsplit[2])
-	return realID
-
-def matrixconverter(seqmatrix, letters): 
-	"""generates a DNA sequence string based on a NumPy matrix"""
-	a = np.transpose(np.nonzero(np.transpose(seqmatrix))).tolist()
-	seqstring = ""
-	for i in a:
-		seqstring += letters[i[1]]
-	return seqstring
-
-def matrixmaker(dnastring):   
-	""" Generates a numpy array from a DNA sequence string, made from ones and zeros. 2D representation of a DNA sequence. Complements the matrixconverter function""" 
-	matrix = np.zeros( (5, len(dnastring)) )
-	index = []
-	for i in range(len(dnastring)):
-		index.append([lettersinv[list(dnastring)[i]], i]) 
-	a = np.array(index)  
-	matrix[a[:,0], a[:,1]] = 1
-	return matrix
-
-def pwmwalk(pwm, sequence, pos): 
-	""" Tests each position of a SHORT DNA sequence as a numpy array against a pwm array. Returns the best alignment score. 
-	The Pos argument lets you define over which portion of the pwm you want to align. Add 0 for the whole thing. 
-	Useful when you add buffer random sequences on the site to align earlier than the 0 position for both array and sequence, or further than the length of the array"""
-	
-	alphapos = 0
-	alphascore = -1000              
-	for i in xrange(pos,len(pwm.transpose())-pos):
-		
-		try:
-			betapos = i 
-			betascore = np.sum(sequence * pwm[:,betapos:(betapos + len(sequence.transpose()))])
-			#print betapos, betascore, alphapos, alphascore
-			if betascore > alphascore:
-				alphascore = betascore
-				alphapos = betapos
-		except ValueError:
-			pass
-	return [alphascore,alphapos]
 
 def dicttofasta(dictio,filename):
-	""" Takes a dictinary with keys as ID WITHOUT the > and fastasequences as values to generate a fasta file"""
+	""" Takes a dictionary with keys as ID WITHOUT the > and fastasequences as values to generate a fasta file"""
 	with open(filename, "w") as tempoutput:
 			tempoutput.write("")
 	for i in dictio:
-		print i
+		
 		with open(filename, "a") as tempoutput:
 			tempoutput.write(">" + str(i) + "\n" + dictio[i] + "\n")
 
+def clipfasta(fastafile):
+	changedict = {}
+
+	for record in SeqIO.parse(fastafile, "fasta"):
+		if "REFERENCE" in str(record.id):
+			reference = str(record.seq)
+		
+		changedict[record.id] = list(record.seq) #add all aligned sequences to a dictionary
+
+	for x in changedict:
+		upstream = True ## clip 5' first: everytime reference has a - , remove that base from consensus and other sequences, until a base is found. 
+		while upstream == True:
+			for j in xrange(len(reference)):
+				if reference[j] != "-":
+					upstream = False
+					break  # if no break, the loop will continue iterating in the actual reference sequence, and if there is a gap (like an insertion, it would delete them from consensus. not good)
+				else:
+					changedict[x][j] = ""
+	
+	for x in changedict: # invert all sequences to perform the same operation on the 3' portion. 
+		testint = changedict[x]
+		changedict[x] = testint[::-1]			
+	
+	referencer = reference[::-1]
+	for x in changedict:
+		downstream = True
+		while downstream == True: 
+			for j in xrange(len(reference)):
+				if referencer[j] != "-":
+					downstream = False
+					break
+					
+				else:
+					changedict[x][j] = ""
+
+	for x in changedict:
+		testint = changedict[x]
+		changedict[x] = testint[::-1]	
+
+	for j in changedict:
+		concat = "".join(changedict[j])
+		changedict[j] = concat
+
+	return changedict
 
 
 
-outputfile2 = "internal_files/muscle2.txt"
-outputfile3 = "internal_files/muscle3.txt"
-outputfile4 = "internal_files/muscle4.txt"
-#finaloutput = "output_clustal/%s.txt"
+def mafftalignment(idindex,filenamedf,ccdsfile):
+	""" Starts a MAFFT alignment for the supplied ID. Will look for additional info for that id in the filenames.
+	 Returns files in CLUSTAL and FASTA format. """
+	
 
-isoformfile = "isoform_list.txt"
+	## Load the fastq id, sequence and phred score corresponding to the Sequenced reactions ID, as in the filenames file. 
+	fwd_id = filenamedf.iloc[idindex]["Fwd_file"]
+	rev_id = filenamedf.iloc[idindex]["Rev_file"]
+	idname = filenamedf.iloc[idindex]["ID"]
+	genename = filenamedf.iloc[idindex]["Genename"]
+	ensemblid = filenamedf.iloc[idindex]["EnsID"]
+	outputfile = filenamedf.iloc[idindex]["outputfile"]
+	ccdslist = []
+	ccds_seqf = []
 
-letters = {0:"A",1:"C",2:"G",3:"T", 4:"N"}  # dictionary of indexes of each nucleotide for matrices
-lettersinv = {"A":0,"C":1,"G":2,"T":3, "N":4}
+	seqdict = {} #Dictionary that will contain FWD, REV and Reference info to make a dataframe. 
+	
+	seqdfhead = ["Number","ID", "Sequence", "REFERENCE"]
+	for record in SeqIO.parse(fastqfile, "fastq"):
+		if record.id == fwd_id:
+			seqdict[0] = ["","FWD", str(record.seq).upper(), "N"]
+			fphred = (record.letter_annotations['phred_quality']) #phred scores for Forward reaction
+			
+		elif record.id == rev_id:
+			seqdict[1] = ["","REV", reversecomp(str(record.seq).upper()), "N"]
+			rphred = (record.letter_annotations['phred_quality']) #phred scores for Reverse reaction
+			rphred.reverse()
+
+	ccdsindex = 5 #this index serves in generating the options for choosing isoforms. Choices 0 to 4 are taken by other functions.
+	ccdsnumber = 2 # actual index number in the df
+	for recordc in SeqIO.parse(ccdsfile, "fasta"):
+		if filenamedf.iloc[idindex]["EnsID"] in str(recordc.id):
+			seqdict[ccdsnumber] = [str(ccdsindex),str(recordc.id)+"|REFERENCE", str(recordc.seq).upper(), "Y"]
+			ccdsindex +=1 
+			ccdsnumber +=1
+
+	seqdf = pd.DataFrame.from_dict(seqdict).T
+	seqdf.columns = seqdfhead
+	
+	seqdf["concatID"] = seqdf["Number"] + ":" + seqdf["ID"] ## Generate a concatenated version of IDs for menu lists during filtering. Visual purposes
+	seqdf["removeID"] = seqdf["Number"] + ": REMOVE " + seqdf["ID"]
+	
+	seqdfc = seqdf.copy() # Generate a copy of original df so we can delete rows as we filter isoforms, but can restore the original df if necessary
+
+	
+	
+	mafftdict = {0:0, 1:1}  ## this dictionary serves to store variables needed for filtering and orienting contigs
+
+	while mafftdict[0] == 0: #as long as this sequence has not been accepted as correct...
+		ccdsidlist = list(seqdfc[seqdfc["REFERENCE"] == "Y"]["ID"])#list of reference sequence IDs
+		if mafftdict[1] == 1:  #if 1, align ALL sequences from the df except the REV. 
+			outdict = seqdfc[seqdfc["ID"] != "REV"].set_index("concatID")["Sequence"].to_dict()
+		elif mafftdict[1] == -1: #if 1, align ALL sequences from the df except the FWD. 
+			outdict = seqdfc[seqdfc["ID"] != "FWD"].set_index("concatID")["Sequence"].to_dict()
+		## This portion is necessary for longer alignments,as errors in the extremities of either reactions tend to make them align improperly to
+		## the reference sequence, as they also try to align unto one another, without success. This creates gaps etc, making it harder to align to isoforms. 
+		## Aligning one, better allowing to vizualise the correct isoform, then the other if needed, makes it much easier. 
+		## They will be aligned together after isoform selection. 
+
+		
+		dicttofasta(outdict,"internal_files/fastaoutputf.fa") 
+		# MAFFT is made to align sequences from a file. BioPython can normally handle it directly, but it does not have all options and is a little awkward. 
+		# So I prefer to output to file, then use MAFFT command line tools to align this file in both CLUSTAL output for visualization, and FASTA for further processing in parallel. 
+		
+
+		subprocess.call("mafft --auto --clustalout --preservecase --quiet internal_files/fastaoutputf.fa > internal_files/fastaoutputftemp.afa", shell=True)
+		subprocess.call("mafft --auto --preservecase --quiet internal_files/fastaoutputf.fa > internal_files/fastaoutputf.afa", shell=True)
+
+
+		with open("internal_files/fastaoutputftemp.afa", "r") as f:  #Let user see the result of this alignment in clustal format. 
+			print f.read()
+
+		mafftlist = ["0:ACCEPT ALIGNMENT", "1:VERIFY REVERSE CONTIG", "2: RESTORE DELETED ISOFORMS", "3: REVERSE COMPLEMENT CONTIGS", "4: REPORT ALIGNMENT TO THE END"]
+		mafftlist = mafftlist + list(seqdfc[seqdfc["REFERENCE"] == "Y"]["removeID"]) #visual tool for user prompt
+			
+		print "\n" 
+		print mafftlist
+		print "\n" 
+		
+		optionchoice= raw_input("CHOOSE OPTION:  ")
+
+		choice = False
+
+		while choice == False: # choice validation loop. Repeat until acceptable answer is given, then execute corresponding code. 
+			if int(optionchoice) not in range(ccdsindex):
+				print str(optionchoice) + " is not a valid choice. Try again"
+				print "\n" 
+				print mafftlist
+				print "\n" 
+				optionchoice= raw_input("CHOOSE OPTION:  ")
+			
+
+			elif int(optionchoice) == 0: # if answer is 0, set mafftdict[0] to 1, which allows to escape the first while loop. Accepts alingment.
+				mafftdict[0] = 1
+				choice = True
+
+				
+			elif int(optionchoice) == 1: # sets mafftdict[1] value to its opposite, to see the reverse complement of the current sequencing reaction shown. 
+				val = mafftdict[1]
+				mafftdict[1] = (val *-1)
+				choice = True
+					
+			elif int(optionchoice) >= 5 and len(ccdsidlist)>1:  #Delete one of the REFERENCE isoforms from alignment, as long as it<s not the last. 
+				seqdfc= seqdfc[seqdfc["Number"] != str(optionchoice)]
+				choice = True
+
+			elif int(optionchoice) >= 5 and len(ccdsidlist)==1: #block deletion of last isoform
+				print "Cannot delete last reference sequence! Accept sequence or Restore isoforms..."
+				print "\n" 
+				print mafftlist
+				print "\n" 
+				optionchoice= raw_input("CHOOSE OPTION:  ")
+			
+			elif int(optionchoice) == 2: #restore deleted isoforms from df. Try again, better luck next time!
+				seqdfc = seqdf.copy()
+				choice = True
+
+			elif int(optionchoice) == 3: #Reverse complement your reactions, in case they were inverted, to see if they alig better. Useful when alignment is messed up, to determine if the problem is due to bad data or orientation
+				fwd = [seqdfc.loc[seqdfc["ID"] == "FWD"]["Sequence"].index.values[0],reversecomp(seqdfc.loc[seqdfc["ID"] == "FWD"]["Sequence"].values[0])]
+				seqdfc.set_value(fwd[0],"Sequence", fwd[1])
+				rev = [seqdfc.loc[seqdfc["ID"] == "REV"]["Sequence"].index.values[0],reversecomp(seqdfc.loc[seqdfc["ID"] == "REV"]["Sequence"].values[0])]
+				seqdfc.set_value(rev[0],"Sequence", rev[1])
+				choice = True
+
+			elif int(optionchoice) == 4: #When not sure, save this id for later. 
+				savelist.append(idindex)
+				choice = True
+
+		outdict = seqdfc.set_index("ID")["Sequence"].to_dict()  #after validation, save the contents of the df to a fasta file and align it. 
+
+	dicttofasta(outdict,"internal_files/fastaoutputf.fa")
+	subprocess.call("mafft --auto --preservecase --quiet internal_files/fastaoutputf.fa > internal_files/both.afa", shell=True)
+	subprocess.call("mafft --auto --preservecase --quiet --clustalout internal_files/fastaoutputf.fa > internal_files/test.afa", shell=True)	
+	
+
+
+
+### Score comparison. 
+	### Verify, on aligned sequences, whether forward and reverse reactions have the same base. If they do, carry on. 
+	### IF they do not, use PHRED scores to see which to choose with the higest confidence. 
+	for record in SeqIO.parse("internal_files/both.afa", "fasta"):
+		
+		if "FWD" in str(record.id):
+			fseq = str(record.seq)
+	
+		elif "REV" in str(record.id):
+			rseq = str(record.seq)
+			
+		else:
+			refseq = str(record.seq)
+			refid = record.id
+	
+	 
+	phred_fwd = []
+	phred_rev = []
+	
+	# test = fseq
+	### Phred scores lists from FASTQ files were not made to be aligned. thus, the gaps created by alignment need to be compensated by adding equivalent in the
+	## phred scores lists. 
+	for j in xrange(len(fseq)):
+		if fseq[j] == "-":
+			phred_fwd.append(0)
+		else:
+			phred_fwd.append(fphred.pop(0))  # if this position has a gap in fwd strand, add a 0. OTherwise, transfer the first item from the phred list and 
+
+	for j in xrange(len(rseq)):
+		if rseq[j] == "-":
+			phred_rev.append(0)
+		else:
+			phred_rev.append(rphred.pop(0))
+	
+	
+
+
+	consensus = ""  #build a consensus sequence after phred score comparison. 
+	for j in xrange(len(fseq)):
+		if j < 20: ## before the first 20 bases, base calls are unreliable in a  sanger reaction. add whichever letter, it won't matter. 
+			consensus += fseq[j]
+		elif refseq[j] == fseq[j] or refseq[j] == rseq[j] : 
+			consensus += refseq[j]
+			#this is a method used by biologists: if one of the discrepant bases is identical to the reference, 
+			#it's safe to assume it to be correct. Can be commented out.
+		elif fseq[j] == rseq[j]:
+			consensus += fseq[j]
+		elif phred_fwd[j] and phred_rev[j] < minphred: #if phred score is low for both, take average of the flanking 10 bases of that basecall to get an estimate. Normally, bad bases calls are found in regions, not alone.  
+			fphredreg = phred_fwd[j-10:j+10]
+			rphredreg = phred_rev[j-10:j+10]
+			fphredavg = sum(fphredreg) / len(fphredreg)
+			rphredavg = sum(rphredreg) / len(rphredreg)
+			if fphredavg > rphredavg:
+				consensus += fseq[j]
+				
+			elif fphredavg < rphredavg:
+				consensus += rseq[j]
+			
+		elif phred_fwd[j] > phred_rev[j]: #if phred score of F is higher than R, assume F is correct. 
+			consensus += fseq[j]
+		
+		elif phred_fwd[j] < phred_rev[j]:
+			consensus += rseq[j]
+		else:
+			consensus += "N"
+	consensus2 = consensus.replace("-","")   # remove the gaps from previous alignment, a new alignment with the consensus will be done. 
+	
+
+	outdict = {(str(idname) + "_"+ str(genename) + "_Consensus"):str(consensus2)}
+	outdict.update(seqdfc[seqdfc["REFERENCE"]=="Y"].set_index("ID")["Sequence"].to_dict()) ## make a dict from consensus and reference sequences, export ot fasta. 
+
+
+
+	if variantmode == True:   #if variant mode is activated, also add variant sequences to this dictionary. 
+		variantdict = {}
+		for record in SeqIO.parse(variantfile, "fasta"):
+			if ensemblid in str(record.id):
+				variantdict[str(record.id)] = str(record.seq)
+	
+		outdict.update(variantdict)
+
+
+	dicttofasta(outdict,"internal_files/outputfile3.txt")	
+	subprocess.call("mafft --auto --preservecase --quiet internal_files/outputfile3.txt > internal_files/outputfile4.afa" , shell=True) #alignment
+
+
+
+	##### Removal of trailing ends section : everything before and afetr the reference sequence is of no potential biological interest
+	
+	if clip == True:
+		changedict = clipfasta("internal_files/outputfile4.afa")
+	else:
+		changedict = {}
+		for record in SeqIO.parse("internal_files/outputfile4.afa", "fasta"):
+			changedict[str(record.id)] = str(record.seq)
+
+	dicttofasta(changedict,"internal_files/outputfile4.txt")  #align all sequences to final output. 
+	fastacall = "mafft --auto --preservecase --quiet internal_files/outputfile4.txt > %sFASTA/%s.afa" % (outputdir, outputfile)
+	clustalcall = "mafft --auto --preservecase --quiet --clustalout internal_files/outputfile4.txt > %sCLUSTAL/%s.afa" % (outputdir, outputfile)
+	subprocess.call(fastacall , shell=True)
+	subprocess.call(clustalcall , shell=True)
+
+
+
+	cfile = "%sCLUSTAL/%s.afa" % (outputdir,outputfile)
+	with open(cfile, "r") as f:
+			print f.read()
+
+	print "\n"
+	print "\n"
+
+	
+	pauseinput = False
+	while pauseinput == False:
+		pause = raw_input("Is this alignment correct?  Keep and move on (Y) or start over at the end(N)?  (Y/N):  ")
+		if pause.upper() == "Y":
+			pauseinput = True
+			
+
+			pass
+		elif pause.upper() == "N":
+			savelist.append(i)
+			pauseinput = True
+
+		else:
+			print "%s is an incorrect answer. Try again" % pause
+
+
+	print "Saved FASTA and CLUSTAL outputs to %s" % outputdir
+
+
+
+
+### Start execution here,
+## Determine if the user wants to align his sequencing data with associated supplied variants 
+
+
+	
+if variantmode == True: #load variant dictionary only if variant mode is on, to save memory. 
+	variantdict = {}
+	for record in SeqIO.parse(variantfile, "fasta"):
+		variantdict[str(record.id)] = str(record.seq)
+	
+ # make necessary directories 
+try:
+    os.makedirs("internal_files/")
+except OSError:
+    if not os.path.isdir("internal_files/"):
+        raise 
+try:
+    os.makedirs(outputdir)
+except OSError:
+    if not os.path.isdir(outputdir):
+        raise 
+try:
+    os.makedirs(outputdir+"FASTA/")
+except OSError:
+    if not os.path.isdir(outputdir+"FASTA/"):
+        raise 
+try:
+    os.makedirs(outputdir+"CLUSTAL/")
+except OSError:
+    if not os.path.isdir(outputdir+"CLUSTAL/"):
+        raise 
 
 
 filenamedf = pd.read_csv(filenames, sep = "\t")
-wells = filenamedf["Well"].tolist()
-
-def phredscores(fastqfile, sequenceid):
-	"""Retrieves a list of phred scores for a given contig"""
-	for record in SeqIO.parse(fastqfile, "fastq"):
-		phred = (record.letter_annotations['phred_quality'])
-
-""" Get phred score from last value and use it on -. Otherwise, a badly read letter will always 
-be prefered to a -, even if that - is in a region of the contig with a higher confidence score. """
-# for record in SeqIO.parse(fastqfile, "fastq"):
-
-
-def mafftalignment(listofids):
-	""" Starts a MUSCLE alignment for all IDs in the list. Returns files in CLUSTAL and FASTA format, along with a list of IDs specified by the user to save for later use"""
-	for i in range(len(listofids)):
-		
-		contigdict = {}
-		contigdictr = {}
-		ccdsdict = {}
-		
-
-		fwd_id = filenamedf.iloc[i]["Fwd_file"]
-		rev_id = filenamedf.iloc[i]["Rev_file"]
-		ccdslist = []
-		ccds_seqf = []
-
-		genename = filenamedf.iloc[i]["Genename"]
-		outputfile = filenamedf.iloc[i]["outputfile"]
-		for recordc in SeqIO.parse(ccdsfile, "fasta"):
-			if filenamedf.iloc[i]["EnsID"] in str(recordc.id):
-				ccdsdict[str(recordc.id)] = str(recordc.seq.upper())
-		
-		
-		for record in SeqIO.parse(fastqfile, "fastq"):
-			if record.id == fwd_id:
-				contigdict["FWD"]= str(record.seq.upper())
-				
-				fphred = (record.letter_annotations['phred_quality'])
-				
-			elif record.id == rev_id:
-				contigdictr["REV"]= reversecomp(str(record.seq.upper()))
-				rphred = (record.letter_annotations['phred_quality'])
-				rphred.reverse()
-				
-		print ccdsdict
-		nextseq = 0
-		orient = 0
-		muscledict = {0:0, 1:1, 2:2 , 3:3} 
-		ccdsidlist = []
-		canceldict = ccdsdict.copy()
-
-
-		while muscledict[0] == 0:
-			idlist = []
-			ccdsindex = 4
-			ccdsidlist = []
-			ccdsdict2 = {}
-			
-			for j in ccdsdict:
-				idlist.append(j)
-				ccdsidlist.append(j)
-			for j in ccdsidlist:
-				muscledict[ccdsindex] = j
-				ccdsdict2[str(ccdsindex) + ": " + j] = ccdsdict[j]
-				ccdsindex += 1
-			
-			
-			mergedict = ccdsdict2.copy()
-			if muscledict[1] == 1:
-				mergedict.update(contigdict)
-			elif muscledict[1] == -1:
-				mergedict.update(contigdictr)	
-			
-			dicttofasta(mergedict,"internal_files/fastaoutputf.fa")
-			
-
-			
-			subprocess.call("mafft --auto --clustalout --preservecase --quiet internal_files/fastaoutputf.fa > internal_files/fastaoutputftemp.afa", shell=True)
-
-			subprocess.call("mafft --auto --preservecase --quiet internal_files/fastaoutputf.fa > internal_files/fastaoutputf.afa", shell=True)
-
-
-			with open("internal_files/fastaoutputftemp.afa", "r") as f:
-				print f.read()
-
-			musclelist = ["0:ACCEPT ALIGNMENT", "1:VERIFY REVERSE CONTIG", "2: RESTORE DELETED ISOFORMS", "3: REVERSE COMPLEMENT CONTIGS", "REPORT ALIGNMENT TO THE END"]
-
-			ccdsindex = 2
-			for i in ccdsidlist:
-				musclelist.append(str(ccdsindex)+": REMOVE "+ str(i))
-				ccdsindex += 1
-				
-			print "\n" 
-			print musclelist
-			print "\n" 
-
-			choice = True
-			canceldict.update(muscledict)
-			optionchoice= raw_input("CHOOSE OPTION:  ")
-
-			while int(optionchoice) > ccdsindex-1:
-				print str(optionchoice) + " is not a valid choice. Try again"
-				print "\n" 
-				print musclelist
-				print "\n" 
-				optionchoice= raw_input("CHOOSE OPTION:  ")
-				
-
-			if optionchoice == str(0):
-				muscledict[0] = 1
-				choice == False
-			elif int(optionchoice) == 1:
-				val = muscledict[1]
-				muscledict[1] = (val *-1)
-				choice = False
-					
-			elif int(optionchoice) <= ccdsindex-1:
-				
-				del ccdsdict[muscledict[int(optionchoice)]]
-				choice = False
-			
-			elif int(optionchoice) == 2:
-				ccdsdict.update(canceldict)
-				choice = False
-			elif int(optionchoice) == 3:
-				ccdsdict.update()
-				choice = False
-			elif int(optionchoice) == 4:
-				ccdsdict.update()
-				choice = False
-		
-		mergedictr = ccdsdict.copy()
-		mergedict = ccdsdict.copy()
-		mergedict.update(contigdict)
-		mergedictr.update(contigdictr)
-
-		dicttofasta(mergedict,"internal_files/fastaoutputf.fa")
-		dicttofasta(mergedictr,"internal_files/fastaoutputr.fa")
-
-		for record in SeqIO.parse("internal_files/fastaoutputr.fa", "fasta"):
-			if "REV" in str(record.id):
-				
-				rseq = str(record.seq)
-				rseqid = str(record.id)
-				
-		with open("internal_files/fastaoutputf.fa", "a") as f:
-			f.write("\n>"+rseqid+"\n"+ rseq+"\n")
-
-		subprocess.call("mafft --auto --preservecase --quiet internal_files/fastaoutputf.fa > internal_files/both.afa", shell=True)
-		subprocess.call("mafft --auto --preservecase --quiet --clustalout internal_files/fastaoutputf.fa > internal_files/test.afa", shell=True)	
-		# subprocess.call("mafft --auto --preservecase --quiet internal_files/fastaoutputr.fa > internal_files/fastaoutputr.afa", shell=True)
-
-		# subMSA1 = 0
-		# subMSA2 = 0
-
-		# with open("internal_files/fastaoutputf.afa", "r") as f:
-		# 	for line in f.readlines():
-		# 		if line.count(">") > 0 :
-		# 			subMSA1 += 1
-		
-		# with open("internal_files/fastaoutputr.afa", "r") as f:
-		# 	for line in f.readlines():				
-		# 		if line.count(">") > 0 :
-		# 			subMSA2 += 1
-		# sub1 = range(subMSA1)
-		# sub2 = range(subMSA2)
-		
-
-		# sub1 = [x+1 for x in sub1]
-		# sub2 = [x+(1+subMSA1) for x in sub2]
-
-		# subMSAlist = []
-
-		# subMSAlist.append('\t'.join(map(str, sub1)))
-		# subMSAlist.append('\t'.join(map(str, sub2)))
-		
-
-		# with open("internal_files/subMSA.txt", "w") as f:
-		# 	f.write("")
-
-		# with open("internal_files/subMSA.txt", "a") as f:
-		# 	for i in subMSAlist:
-		# 		f.write(i + "\n")
-
-		# filenamesin = ["internal_files/fastaoutputf.afa", "internal_files/fastaoutputr.afa"]
-		# with open('internal_files/merged.afa', 'w') as outfile:
-		# 	for fname in filenamesin:
-		# 		with open(fname) as infile:
-		# 			outfile.write(infile.read())
-
-
-		# subprocess.call("mafft --merge internal_files/subMSA.txt internal_files/merged.afa  > internal_files/both.afa", shell=True)
-
-		# alignment = AlignIO.convert("internal_files/both.afa", "fasta", "internal_files/test.afa", "clustal")
-
-
-		# subprocess.call("mafft --merge internal_files/fastaoutputf.afa internal_files/fastaoutputr.afa  > internal_files/test.afa", shell=True)
-
-
-
-		for record in SeqIO.parse("internal_files/both.afa", "fasta"):
-			if "FWD" in str(record.id):
-				fseq = str(record.seq)
-		
-			elif "REV" in str(record.id):
-				rseq = str(record.seq)
-				
-			else:
-				refseq = str(record.seq)
-				refid = record.id
-		
-		 
-		phred_fwd = []
-		phred_rev = []
-		
-		test = fseq
-		
-		for j in xrange(len(fseq)):
-			if fseq[j] == "-":
-				phred_fwd.append(0)
-			else:
-				phred_fwd.append(fphred.pop(0))
-
-		for j in xrange(len(rseq)):
-			if rseq[j] == "-":
-				phred_rev.append(0)
-			else:
-				phred_rev.append(rphred.pop(0))
-		
-		
-		consensus = ""
-		for j in xrange(len(fseq)):
-			
-			
-			if j < 20:
-				consensus += fseq[j]
-			elif refseq[j] == fseq[j] or refseq[j] == rseq[j] :
-				consensus += refseq[j]
-			elif fseq[j] == rseq[j]:
-				consensus += fseq[j]
-			elif phred_fwd[j] and phred_rev[j] < 15: #subjective threshold.  20 is a 1/100 chance of a wrong call, 10 is a 1 in 10. 
-				fphredreg = phred_fwd[j-10:j+10]
-				rphredreg = phred_rev[j-10:j+10]
-				fphredavg = sum(fphredreg) / len(fphredreg)
-				rphredavg = sum(rphredreg) / len(rphredreg)
-				if fphredavg > rphredavg:
-					consensus += fseq[j]
-					
-				elif fphredavg < rphredavg:
-					consensus += rseq[j]
-				
-			elif phred_fwd[j] > phred_rev[j]:
-				consensus += fseq[j]
-			
-			elif phred_fwd[j] < phred_rev[j]:
-				consensus += rseq[j]
-			else:
-				consensus += "N"
-		consensus2 = consensus.replace("-","")
-		
-
-		with open("internal_files/outputfile3.txt", "w") as foutput:	
-			foutput.write("")
-
-		with open("internal_files/outputfile3.txt", "a") as foutput:	
-			foutput.write('>' + str(genename) + "_Consensus" + '\n' + str(consensus2)+"\n")
-
-		# print snpinfodf2
-		ensemblid = []
-		for x in idlist:
-			with open("internal_files/outputfile3.txt", "a") as foutput:	
-				foutput.write('>' + x + '\n' + str(ccdsdict[x])+"\n")
-		
-			ensemblid.append(x.split("|")[0])
-
-		
-		print ensemblid
-		if snv == "y":
-			snvdf = snpinfodf2[snpinfodf2["Ensembl Gene ID"].isin(ensemblid)]
-			for x in snvdf["Variation Name"]:
-				with open("internal_files/outputfile3.txt", "a") as foutput:	
-					foutput.write('>' + x + '\n' + str(snvdict[x])+"\n")
-
-
-		fastacall = "mafft --auto --preservecase --quiet internal_files/outputfile3.txt > internal_files/outputfile4.afa"
-			
-		
-		# fastacall = "muscle -in internal_files/outputfile3.txt  -out internal_files/outputfile4.txt -gapopen -200 -gapextend 20" 
-		subprocess.call(fastacall , shell=True)
-
-		referencedict = {}
-		changedict = {}
-
-		for record in SeqIO.parse("internal_files/outputfile4.afa", "fasta"):
-			if ensemblid[0] in str(record.id):
-				reference = str(record.seq)
-			
-			changedict[record.id] = list(record.seq)
-		
-		for x in changedict:
-			upstream = True
-			while upstream == True:
-				for j in xrange(len(reference)):
-					if reference[j] != "-":
-						upstream = False
-						break
-						# print changedict
-					else:
-						changedict[x][j] = ""
-		
-		for x in changedict:
-			testint = changedict[x]
-			changedict[x] = testint[::-1]			
-		
-		
-		
-		referencer = reference[::-1]
-		for x in changedict:
-			downstream = True
-			while downstream == True: 
-				for j in xrange(len(reference)):
-					if referencer[j] != "-":
-						downstream = False
-						break
-						# print changedict
-					else:
-						changedict[x][j] = ""
-
-		for x in changedict:
-			testint = changedict[x]
-			changedict[x] = testint[::-1]	
-
-		for j in changedict:
-			concat = "".join(changedict[j])
-			changedict[j] = concat
-
-		dicttofasta(changedict,"internal_files/outputfile4.txt")
-
-		
-		fastacall = "mafft --auto --preservecase --quiet internal_files/outputfile4.txt > final/fasta/%s.afa" % outputfile
-		clustalcall = "mafft --auto --preservecase --quiet --clustalout internal_files/outputfile4.txt > final/clustal/%s.afa" % outputfile
-		
-
-		subprocess.call(fastacall , shell=True)
-		subprocess.call(clustalcall , shell=True)
-
-		cfile = "final/clustal/%s.afa" % outputfile
-		with open(cfile, "r") as f:
-				print f.read()
-
-		print "\n"
-		print "\n"
-		irrelevant = raw_input("Ready for next gene?  Press any key to continue...")			
-
+ids = filenamedf["ID"].tolist()
 savelist = []
+for i in xrange(len(ids)):
+	mafftalignment(i, filenamedf,ccdsfile)
+	
 
-mafftalignment(wells)
 
 while len(savelist) > 0:
 	save = savelist
 	savelist = []
-	musclealignment(save)
+	for i in save:
+		mafftalignment(i,filenamedf,ccdsfile)
+
+print "Alignment Over!" 
+
+
+#remove the temporary files and directory for cleaning up. 
+shutil.rmtree("internal_files")
