@@ -1,10 +1,10 @@
-#sequencing-alignment-sanger
+# sequencing-alignment-sanger
 
 
-###Author: Adam-Nicolas Pelletier
-###Github: https://github.com/adamnicolaspelletier/sequencing-alignment-sanger.git
+### Author: Adam-Nicolas Pelletier
+### Github: https://github.com/adamnicolaspelletier/sequencing-alignment-sanger.git
 
-##Scripts to handle Sanger sequencing data
+## Scripts to handle Sanger sequencing data
 
 Sanger sequencing is used very often in molecular biology. Yet, unless your desired sequence is short, if you try to align your forward and reverse runs against one-another, you do not have 100% of your sequence with good confidence. Sometimes, you will have inconsistencies/conflicting results (indels, SNVs) between the 2 sequencing reactions - what should you believe? 
 
@@ -36,8 +36,8 @@ If necessary, the user can also supply fasta sequences with containing variants,
 
 
 
-# sequencingalignment.py
-## USER GUIDE:
+## sequencingalignment.py
+### USER GUIDE:
 
 This script was designed with high-throughput in mind: meaning if you only need one or 2 sequences aligned, you may find you are jumping through unnecessary hoops. However, it remains possible to use with this in mind. 
 
