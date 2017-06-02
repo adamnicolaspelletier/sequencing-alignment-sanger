@@ -1,6 +1,10 @@
 #sequencing-alignment-sanger
 
-#Scripts to handle Sanger sequencing data
+
+###Author: Adam-Nicolas Pelletier
+###Github: https://github.com/adamnicolaspelletier/sequencing-alignment-sanger.git
+
+##Scripts to handle Sanger sequencing data
 
 Sanger sequencing is used very often in molecular biology. Yet, unless your desired sequence is short, if you try to align your forward and reverse runs against one-another, you do not have 100% of your sequence with good confidence. Sometimes, you will have inconsistencies/conflicting results (indels, SNVs) between the 2 sequencing reactions - what should you believe? 
 
@@ -12,8 +16,6 @@ This is a simple approach to take FASTQ files and do global alignment using MAFF
 
 
 If necessary, the user can also supply fasta sequences with containing variants, which is useful to detect if a construct has acquired a desirable mutation after site-directed mutagenesis.
-
-Since many sequencing platforms supply their results only in ABI and FASTA format, I also included a small script to transform ABI files to a single FASTQ file using a simple textfile legend. (abitofastq.py)
 
 
 ## Requirements:
@@ -33,6 +35,8 @@ Since many sequencing platforms supply their results only in ABI and FASTA forma
 
 
 
+
+# sequencingalignment.py
 ## USER GUIDE:
 
 This script was designed with high-throughput in mind: meaning if you only need one or 2 sequences aligned, you may find you are jumping through unnecessary hoops. However, it remains possible to use with this in mind. 
@@ -64,6 +68,9 @@ Finally, the script has optional FASTA clipping functionality to clean out outpu
 
 
 
+
+
+
 ## KNOWN BUGS:
  IPYTHON has problems with the argparse module, other Python distributions do not. I suggest using Official Python in the meantime. 
  Script has not been tested in Python 3.
@@ -79,3 +86,6 @@ Finally, the script has optional FASTA clipping functionality to clean out outpu
 
 
  Use the -h flag for further options and documentation
+
+
+
