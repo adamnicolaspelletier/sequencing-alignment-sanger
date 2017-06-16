@@ -4,8 +4,8 @@
 ### sequencingalignment.py
 ### Copyright 2017 Institut de Recherche en Immunologie et Cancerologie (IRIC)
 ### Author :  Adam-Nicolas Pelletier
-### Last modified On: 25-05-17
-
+### Last modified On: 25-06-16
+### Version 2.01
 
 
 from Bio import SeqIO
@@ -20,7 +20,7 @@ import shutil
 
 ########################################################################################################################################################
 ########################################################## USER INPUT  AND OUTPUT ######################################################################
-cwd = os.getcwd() 
+cwd = os.path.dirname(os.path.realpath(__file__))
 
 pd.options.mode.chained_assignment = None  # default='warn
 
@@ -31,7 +31,7 @@ parser.add_argument("-fq","--fastqfile",
 					help="FASTQ file containing sequencing results. Defaults to 'docs/ex_fastq_seq.fq'", default= str(cwd)+"/docs/ex_fastq_seq.fq")
 
 parser.add_argument("-r", "--reference", default=str(cwd)+"/docs/ex_ccds_seq.fa",
-					help="File Containing reference FASTA sequences. Defaults to 'CWD/docs/ex_ccds_seq.fa'")
+					help="File Containing reference FASTA sequences. Defaults to 'docs/ex_ccds_seq.fa'")
 
 parser.add_argument("-vm", "--variantmode", action="store_true",
 					help="Activates variant mode, to make alignments based on the variant fasta flag.")
@@ -40,13 +40,13 @@ parser.add_argument("-c", "--clip", action="store_true",
 					help="Clip terminal bases before and after the REFERENCE sequence in the final output.")
 
 parser.add_argument("-v", "--variantfasta", default=str(cwd)+"/docs/ex_variantfasta.fa",
-					help="File Containing Variant FASTA sequences. Can be generated automatically using the sitedirmutagen.py script. Defaults to 'CWD/docs/ex_variantfasta.fa'")
+					help="File Containing Variant FASTA sequences. Can be generated automatically using the sitedirmutagen.py script. Defaults to 'docs/ex_variantfasta.fa'")
 
 parser.add_argument("-f","--filenames",
-					help="File containing the info for each individual FastQ Entry. Defaults to 'CWD/docs/ex_filenames.txt'", default= str(cwd)+"/docs/ex_filenames.txt")
+					help="File containing the info for each individual FastQ Entry. Defaults to 'docs/ex_filenames.txt'", default= str(cwd)+"/docs/ex_filenames.txt")
 
 parser.add_argument("-o", "--outputdir", default=str(cwd)+"/docs/Alignments/",
-                    help="Directory for Clustal and FASTA alignments files. Will create directory if it does not exist. Defaults to CWD/docs/Alignments/")
+                    help="Directory for Clustal and FASTA alignments files. Will create directory if it does not exist. Defaults to docs/Alignments/")
 
 parser.add_argument("-mp","--minphred",
 					help="Minimal threshold of quality to trust a phred score comparison between 2 reactions. Defaults to 15. 20 is a 1/100 miscall, and 10 a 1/10. ", default= 15)
