@@ -75,7 +75,7 @@ If you have more than one reference sequence (VERY LARGE FASTA file, with hundre
 However, if one wants to determine which isoform his amplified sequence corresponds to, thus more than 1 reference sequence, the script will show the alignment with all of them, letting the user choose which isoform he wants to align to. 
 
 
-The script also includes a variant mode, which lets the user visualize his alignments with variant(SNV, mutations, indels) fasta sequences of the reference sequence. This is useful after cloning a potnetially mutated gene, or inducing directly mutagenesis. Variant FASTA sequences can be obtained form sitedirmutagen.py script, from the same author. 
+The script also includes a variant mode, which lets the user visualize his alignments with variant(SNV, mutations, indels) fasta sequences of the reference sequence. This is useful after cloning a potentially mutated gene, or inducing directly mutagenesis. Variant FASTA sequences can be obtained from [sitedirmutagen.py]() script, from the same author. 
 
 ```sh
 
@@ -100,7 +100,7 @@ Use the -h flag for further options and documentation
 * Add functionality for multiple FORWARD and REVERSE contigs for a given reference sequence at once. Useful for long genes that require multiple reactions  
 to span the full length. 
 * Add support for regional phred scoring comparison, instead of per base. Will judge whether upon encounter of a discrepancy, whether the base call is a in less reliable region of the sequencing reaction, such as often found in the extremities. 
-* Add optional automatic isoform detection, instead of user choice. Biologists tend to prefer the latter, but high-throughput is usually better suited with the former. 
+* Add optional automatic isoform detection, instead of user choice. Optimal for high-thoughput alignment. 
 
 
 

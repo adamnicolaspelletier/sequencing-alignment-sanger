@@ -1,0 +1,23 @@
+#ignore testing dir
+docs/testing
+
+#Ignore R script
+lucifanalysis.R
+muscle.sh
+isoformpicker.py
+abitofastq.py
+docs/template.txt
+docs/template.xlsx
+docs/ABI_files
+docs/Alignments
+docs/clustal_alignments_genes
+docs/FASTQ
+docs/final
+docs/internal_files
+docs/mydir
+docs/output_clustal
+docs/testing
+
+.DS_Store
+
+
