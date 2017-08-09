@@ -16,6 +16,7 @@ import subprocess
 import sys
 import argparse
 import shutil
+# from dna_tools import reversecomp
 
 
 ########################################################################################################################################################
@@ -85,21 +86,39 @@ print "\n\n"
 
 
 
-def reversecomp(rprimsequence): 
-	"""Make a complement version of the sequence, and reverse it so it has the proper orientation. Standard in biology"""
-	a = ""
-	tempzrev = rprimsequence
-	tempzrev = tempzrev.replace("T","X")
-	tempzrev = tempzrev.replace("A","T")
-	tempzrev = tempzrev.replace("X","A")
-	tempzrev = tempzrev.replace("C","Y")
-	tempzrev = tempzrev.replace("G","C")
-	tempzrev = tempzrev.replace("Y","G")
-	templist = list(tempzrev)
-	templist.reverse()
-	for i in templist:
-		a += i
-	return a
+def reversecomp(sequence): 
+	""" Make a reverse complement version of the input sequence. Both input and output are strings
+
+	Example:   print reversecomp('AATTGGCC')
+				> 'GGCCAATT'"""
+	
+	rev_dict = {"A":"T", "T":"A", "C":"G", "G":"C" , "N": "N"}
+	rev_list = []
+	for i in list(sequence):
+		rev_list.append(rev_dict[i])
+	rev_list.reverse()
+
+	revcomp = ""
+
+	for i in rev_list:
+		revcomp += i
+
+	return revcomp
+	
+
+	# a = ""
+	# tempzrev = rprimsequence
+	# tempzrev = tempzrev.replace("T","X")
+	# tempzrev = tempzrev.replace("A","T")
+	# tempzrev = tempzrev.replace("X","A")
+	# tempzrev = tempzrev.replace("C","Y")
+	# tempzrev = tempzrev.replace("G","C")
+	# tempzrev = tempzrev.replace("Y","G")
+	# templist = list(tempzrev)
+	# templist.reverse()
+	# for i in templist:
+	# 	a += i
+	# return a
 
 
 def dicttofasta(dictio,filename):
