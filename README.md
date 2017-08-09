@@ -26,6 +26,7 @@ Script to handle Sanger sequencing data automatically
 
   1. Pandas (+ Numpy) 0.20.1+
   2. BioPython 1.69+
+  3. adamP_BioTools v.1.16+
  
 * Sequencing data. Either ABI files, or FASTQ files. FASTA can of course also be aligned, but has a loss in precision due to the absence of PHRED scores. 
 * Reference Sequence
